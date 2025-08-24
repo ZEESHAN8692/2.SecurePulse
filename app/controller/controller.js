@@ -5,6 +5,7 @@ import sendMail from "../middleware/sendMail.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import { comparePassword, hsahePassword } from "../middleware/authCheck.js";
 
 class SecureController {
     async register(req, res) {
@@ -16,7 +17,7 @@ class SecureController {
 
             const tempPassword = crypto.randomBytes(6).toString("hex");
 
-            const hashedPassword = await bcrypt.hash(tempPassword, 10);
+            const hashedPassword = await hsahePassword(tempPassword);
 
             const newUser = await User.create({
                 name,
@@ -51,39 +52,41 @@ class SecureController {
 
     async login(req, res) {
         try {
-            let { email, password } = req.body;
+            const { email, password } = req.body;
 
             if (!email || !password) {
                 return res.status(400).json({ message: "Email and password are required" });
             }
 
-            email = email.trim();
-            password = password.trim();
-
+            // Find the user by email
             const user = await User.findOne({ email });
+
             if (!user) {
-                return res.status(401).json({ message: "Invalid email or password" });
+                return res.status(404).json({ message: "User not found" });
             }
 
-            // check password
-            const isPasswordMatch = await bcrypt.compare(password, user.password);
-            console.log("👉 Entered Password:", password);
-            console.log("👉 Stored Hash:", user.password);
-            console.log("👉 Match Result:", isPasswordMatch);
+            // Compare password
+            const isPasswordValid = await bcrypt.compare(password, user.password);
 
-            if (!isPasswordMatch) {
-                return res.status(401).json({ message: "Invalid email or password" });
+            if (!isPasswordValid) {
+                return res.status(401).json({ message: "Invalid credentials" });
             }
 
-            // generate token
-            const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
-                expiresIn: "1h",
-            });
+            // Create JWT token
+            const token = jwt.sign(
+                { userId: user._id, email: user.email , role: user.role },
+                process.env.JWT_SECRET, 
+                { expiresIn: '1h' } 
+            );
 
             res.status(200).json({
                 message: "Login successful",
-                user: { id: user._id, email: user.email },
                 token,
+                user: {
+                    id: user._id,
+                    name: user.name,
+                    email: user.email
+                }
             });
 
         } catch (error) {
@@ -93,12 +96,28 @@ class SecureController {
     }
 
     async resetPassword(req, res) {
-        return res.status(200).json({ message: "Reset password API not implemented yet" });
+        try {
+            const { email, password } = req.body;
+            if (!email || !password) {
+                return res.status(400).json({ message: "Email and password are required" });
+            }
+            const user = await User.findOne({ email });
+            if (!user) {
+                return res.status(404).json({ message: "User not found" });
+            }
+            const hashedPassword = await hsahePassword(password);
+            user.password = hashedPassword;
+            await user.save();
+            res.status(200).json({ message: "Password reset successful" });
+            
+        } catch (error) {
+            res.status(500).json({ message: "Internal server error", error: error.message });
+        }
     }
 
     async getAllUsers(req, res) {
         try {
-            const users = await User.find({});
+            const users = await User.find().select("-password");
             res.status(200).json({ message: "Users fetched successfully", data: users });
         } catch (error) {
             res.status(500).json({ message: "Internal server error", error: error.message });

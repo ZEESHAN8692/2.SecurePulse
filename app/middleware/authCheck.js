@@ -1,3 +1,21 @@
+import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
+
+const hsahePassword = (password) => {
+  try {
+    const salt = 10;
+    const hashedPassword = bcrypt.hashSync(password, salt);
+    return hashedPassword;
+  } catch (err) {
+    console.log(err);
+  }
+};
+const comparePassword = async(password, hashedPassword) => {
+  return await bcrypt.compare(password, hashedPassword);
+};
+
+
+
 const AuthCheck = (req, res, next) => {
   const token =
     req?.body?.token || req?.query?.token || req?.headers["x-access-token"];
@@ -29,7 +47,7 @@ const adminCheck = (req, res, next) => {
     });
   }
   try {
-    const decoded = jwt.verify(token, process.env.JWT_ACCESS_TOKEN_SECRET_KEY);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = decoded;
     console.log("afetr login data", req.user);
     if (req.user.role !== "admin") {
@@ -44,3 +62,5 @@ const adminCheck = (req, res, next) => {
   }
   return next();
 };
+
+export { AuthCheck, adminCheck , hsahePassword, comparePassword };
