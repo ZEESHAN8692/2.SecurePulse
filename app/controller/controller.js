@@ -25,6 +25,7 @@ class SecureController {
                 password: hashedPassword,
             });
 
+            
             // send mail with plain password
             await sendMail(
                 email,
